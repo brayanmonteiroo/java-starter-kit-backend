@@ -1,0 +1,110 @@
+# Dev alinhado ao guia oficial Java + Compose Watch:
+# https://docs.docker.com/guides/java/
+# https://docs.docker.com/compose/how-tos/file-watch/
+name: java-starter-kit-backend
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: jsk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: java_starter
+      POSTGRES_USER: starter
+      POSTGRES_PASSWORD: secret
+    ports:
+      - "5438:5432"
+    volumes:
+      - jsk_postgres:/var/lib/postgresql
+      - ./docker/postgres/init-test-db.sql:/docker-entrypoint-initdb.d/01-init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U starter -d java_starter"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    container_name: jsk-redis
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: jsk-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: jsk-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    container_name: jsk-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    environment:
+      SERVER_PORT: 8098
+      DATABASE_URL: jdbc:postgresql://postgres:5432/java_starter
+      DATABASE_USERNAME: starter
+      DATABASE_PASSWORD: secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: guest
+      RABBITMQ_PASSWORD: guest
+      MAIL_HOST: mailpit
+      MAIL_PORT: 1025
+      FRONTEND_URL: http://localhost:4200
+      CORS_ORIGINS: http://localhost:4200
+      JWT_SECRET: local-dev-secret-change-me-to-at-least-thirty-two-chars
+      SEED_ENABLED: "true"
+      SEED_ADMIN_EMAIL: admin@java-starter.test
+      SEED_ADMIN_PASSWORD: password
+    ports:
+      - "8098:8098"
+      - "8000:8000" # JDWP (debug remoto)
+    develop:
+      watch:
+        - path: .
+          action: rebuild
+
+volumes:
+  jsk_postgres:
+
+# Uso diário:
+#   docker compose -f compose.dev.yaml up --build -d
+# Com live rebuild (guia Docker):
+#   docker compose -f compose.dev.yaml up --build --watch

@@ -1,0 +1,11 @@
+---
+description: Arquitetura hexagonal Spring Boot deste starter
+alwaysApply: true
+---
+
+# Hexagonal Spring
+
+- Novos endpoints: controller em `adapters.in.web` + use case em `application` + port em `domain` se precisar de I/O.
+- Entidades JPA ficam só em `adapters.out.persistence.entity`.
+- Domínio puro: sem anotações Spring/JPA no `domain`.
+- Não introduzir pacotes `controller/service/repository` no estilo MVC clássico fora dos adapters.
